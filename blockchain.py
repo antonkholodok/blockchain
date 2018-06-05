@@ -1,6 +1,9 @@
 import hashlib
 import json
+from textwrap import dedent
 from time import time
+from flask import Flask
+from uuid import uuid4
 
 class Blockchain(object):
 
@@ -104,3 +107,34 @@ class Blockchain(object):
     @property
     def last_block(self):
         return self.chain[-1]
+
+app = Flask(__name__)
+node_id = str(uuid4()).replace('-', '')
+blockchain = Blockchain()
+
+@app.route('/mine', methods=['GET'])
+def mine():
+    return "we'll mine a new block"
+
+@app.route('/transactions/new', methods=['POST'])
+def new_transaction():
+    values = request.get_json()
+    required = ['sender', 'recipient', 'amount']
+    if not all(k in values for k in required):
+        return 'Missing values', 400
+    index = blockchain.new_transaction(values['sender'], values['recipient'], values['amount'])
+    response = {
+        'message': f'Transaction will be added to block {index}'
+    }
+    return response, 200
+
+@app.route('/chain', methods=['GET'])
+def full_chain():
+    response = {
+        'chain': blockchain.chain,
+        'length': len(blockchain.chain)
+    }
+    return json.jsonify(response), 200
+
+if __name__ == 'main':
+    app.run(host='0.0.0.0', port=5000)
