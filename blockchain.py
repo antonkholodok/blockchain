@@ -2,17 +2,29 @@ import hashlib
 import json
 from textwrap import dedent
 from time import time
-from flask import Flask, jsonify, request
-from uuid import uuid4
+from urllib.parse import urlparse
 
 class Blockchain(object):
 
     def __init__(self):
         self.chain = []
         self.current_transactions = []
+        self.nodes = set()
         
         # genesis block
         self.new_block(previous_hash=1, proof=100)
+
+    def register_node(self, address):
+
+        '''
+        Adds new node to list of nodes.
+
+        :param address: <str> Address of node (http://192.168.0.5:5000)
+        :return: None
+        '''
+
+        parsed_url = urlparse(address)
+        self.nodes.add(parsed_url)
 
     def proof_of_work(self, last_proof):
 
@@ -107,62 +119,3 @@ class Blockchain(object):
     @property
     def last_block(self):
         return self.chain[-1]
-
-app = Flask(__name__)
-node_id = str(uuid4()).replace('-', '')
-blockchain = Blockchain()
-
-@app.route('/mine', methods=['GET'])
-def mine():
-    last_block = blockchain.last_block
-    last_proof = last_block['proof']
-    proof = blockchain.proof_of_work(last_proof)
-
-    # we must receive a reward for finding the proof.
-    # the sender is "0" to signify that this node has mined a new coin.
-    blockchain.new_transaction(
-        sender='0',
-        recipient=node_id,
-        amount=1
-    )
-
-    # forge the new block by adding it to the chain
-    previous_hash = blockchain.hash(last_block)
-    block = blockchain.new_block(proof, previous_hash)
-
-    response = {
-        'message': 'new block forged',
-        'index': block['index'],
-        'transactions': block['transactions'],
-        'proof': block['proof'],
-        'previous_hash': block['previous_hash']
-    }
-    return jsonify(response), 200
-
-
-@app.route('/transactions/new', methods=['POST'])
-def new_transaction():
-    values = request.get_json()
-    required = ['sender', 'recipient', 'amount']
-    if not all(k in values for k in required):
-        return 'Missing values', 400
-    index = blockchain.new_transaction(
-        values['sender'], 
-        values['recipient'], 
-        values['amount'])
-    response = {
-        'message': f'Transaction will be added to block {index}'
-    }
-    print("sending response", response)
-    return jsonify(response), 200
-
-@app.route('/chain', methods=['GET'])
-def full_chain():
-    response = {
-        'chain': blockchain.chain,
-        'length': len(blockchain.chain)
-    }
-    return jsonify(response), 200
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
